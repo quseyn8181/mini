@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aslanov Chat 1-on-1</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --bg: #e6f0ff;
+            --white: #ffffff;
+            --gray: #f8f9fa;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+        }
+
+        /* Контейнер приложения */
+        .container { 
+            background: var(--white); 
+            padding: 25px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+            width: 100%; 
+            max-width: 400px;
+        }
+
+        h2 { text-align: center; color: #333; margin-top: 0; }
+
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: 0.3s;
+        }
+
+        button:hover { opacity: 0.9; }
+        .btn-secondary { background: #6c757d; margin-top: 8px; }
+
+        /* Чат */
+        #chat { 
+            height: 350px; 
+            border: 1px solid #eee; 
+            overflow-y: auto; 
+            background: var(--gray); 
+            padding: 15px; 
+            border-radius: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px;
+        }
+
+        .msg { 
+            max-width: 80%; 
+            padding: 10px 14px; 
+            border-radius: 15px; 
+            font-size: 14px; 
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .msg.mine { 
+            align-self: flex-end; 
+            background: var(--primary); 
+            color: white; 
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg.theirs { 
+            align-self: flex-start; 
+            background: #e9ecef; 
+            color: #333;
+            border-bottom-left-radius: 2px;
+        }
+
+        .uid-info { font-size: 11px; color: #666; text-align: center; margin-bottom: 15px; }
+        .chat-controls { display: flex; gap: 5px; margin-top: 10px; }
+        .chat-controls input { margin: 0; }
+        .chat-controls button { width: auto; }
+    </style>
+</head>
+<body>
+
+<div id="authBox" class="container">
+    <h2>Вход / Регистрация</h2>
+    <input id="email" type="email" placeholder="Email">
+    <input id="pass" type="password" placeholder="Пароль">
+    <button id="btnLogin">Войти</button>
+    <button id="btnReg" class="btn-secondary">Создать аккаунт</button>
+</div>
+
+<div id="chatBox" class="container" style="display:none">
+    <h2 id="chatTitle">Приватный чат</h2>
+    <div id="myUidDisplay" class="uid-info">Загрузка...</div>
+    
+    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+        <input id="toUid" placeholder="UID собеседника" style="margin:0">
+        <button id="btnStart" style="width: auto;">Начать</button>
+    </div>
+
+    <div id="chat"></div>
+
+    <div class="chat-controls">
+        <input id="msg" placeholder="Сообщение...">
+        <button id="btnSend">➤</button>
+    </div>
+    
+    <button id="btnExit" class="btn-secondary" style="font-size: 12px; padding: 5px;">Выход</button>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // ТВОЙ КОНФИГ
+    const firebaseConfig = {
+        apiKey: "AIzaSyCq4IuYRYx4a78u5uf4cc-WrpdWks3BLrg",
+        authDomain: "aslanovchat-e4964.firebaseapp.com",
+        projectId: "aslanovchat-e4964",
+        storageBucket: "aslanovchat-e4964.appspot.com",
+        messagingSenderId: "110257571643",
+        appId: "1:110257571643:web:6dd1529642fc6b665e991e",
+        measurementId: "G-GPGYLEEY5J"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Элементы
+    const authBox = document.getElementById("authBox");
+    const chatBox = document.getElementById("chatBox");
+    const chatDiv = document.getElementById("chat");
+    const myUidDisplay = document.getElementById("myUidDisplay");
+    
+    let currentChatId = null;
+    let unsub = null;
+
+    // Регистрация
+    document.getElementById("btnReg").onclick = async () => {
+        try {
+            const cred = await createUserWithEmailAndPassword(auth, email.value, pass.value);
+            await setDoc(doc(db, "users", cred.user.uid), { email: email.value });
+            alert("Успешно! Ваш UID: " + cred.user.uid);
+        } catch(e) { alert(e.message); }
+    };
+
+    // Вход
+    document.getElementById("btnLogin").onclick = () => {
+        signInWithEmailAndPassword(auth, email.value, pass.value).catch(e => alert(e.message));
+    };
+
+    // Выход
+    document.getElementById("btnExit").onclick = () => signOut(auth);
+
+    // Логика формирования ID чата (сортировка UID, чтобы у обоих был один и тот же путь)
+    const getChatId = (u1, u2) => [u1, u2].sort().join("_");
+
+    // Запуск чата
+    document.getElementById("btnStart").onclick = () => {
+        const otherUid = toUid.value.trim();
+        if(!otherUid || otherUid === auth.currentUser.uid) return alert("Введите корректный UID");
+
+        if(unsub) unsub(); // Закрываем старый чат
+        currentChatId = getChatId(auth.currentUser.uid, otherUid);
+        chatDiv.innerHTML = "<p style='text-align:center'>Загрузка сообщений...</p>";
+
+        const q = query(collection(db, "chats", currentChatId, "messages"), orderBy("time", "asc"));
+        
+        unsub = onSnapshot(q, (snap) => {
+            chatDiv.innerHTML = "";
+            snap.forEach(d => {
+                const m = d.data();
+                const div = document.createElement("div");
+                div.className = `msg ${m.uid === auth.currentUser.uid ? 'mine' : 'theirs'}`;
+                div.textContent = m.text;
+                chatDiv.appendChild(div);
+            });
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        });
+        alert("Чат открыт!");
+    };
+
+    // Отправка
+    async function sendMsg() {
+        if(!currentChatId || !msg.value.trim()) return;
+        const text = msg.value;
+        msg.value = ""; // Очищаем сразу для скорости
+        await addDoc(collection(db, "chats", currentChatId, "messages"), {
+            uid: auth.currentUser.uid,
+            text: text,
+            time: Date.now()
+        });
+    }
+
+    document.getElementById("btnSend").onclick = sendMsg;
+    msg.onkeypress = (e) => { if(e.key === "Enter") sendMsg(); };
+
+    // Следим за состоянием входа
+    onAuthStateChanged(auth, user => {
+        if(user) {
+            authBox.style.display = "none";
+            chatBox.style.display = "block";
+            myUidDisplay.innerText = "Ваш UID: " + user.uid;
+        } else {
+            authBox.style.display = "block";
+            chatBox.style.display = "none";
+            if(unsub) unsub();
+        }
+    });
+</script>
+</body>
+</html>
